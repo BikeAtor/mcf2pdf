@@ -1,26 +1,14 @@
 # mcf2pdf Converter for Mein CEWE Fotobuch (My CEWE Photobook) files to PDF
 
-<<<<<<< HEAD
-Latest Release: Version **0.3.7**
-=======
-Latest Release: Version **0.7.4**
->>>>>>> 35568c6846ee27b90e7013d3e69662f54899abbb
+Latest Release: Version **0.7.5-BikeAtor**
 
+Initial Author: Florian Albrecht
 
-<<<<<<< HEAD
 Author: Grzegorz Jaśkiewicz
 
 Author: rbodziony
 
 Author: BikeAtor
-
-Downloads can be found [here](https://github.com/albrechtf/mcf2pdf/releases). Please read the **installation instructions** below carefully, **otherwise the software will definitely not work for you.** You have been warned.
-=======
-Initial Author: Florian Albrecht
-Current developer : rbodziony
-
-Downloads can be found [here](https://github.com/rbodziony/mcf2pdf/releases). Please read the **installation instructions** below carefully, **otherwise the software will definitely not work for you.** You have been warned.
->>>>>>> 35568c6846ee27b90e7013d3e69662f54899abbb
 
 ## What is mcf2pdf? What not?
 
