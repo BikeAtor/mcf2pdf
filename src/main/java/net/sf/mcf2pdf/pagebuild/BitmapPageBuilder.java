@@ -23,7 +23,7 @@ import javax.imageio.ImageIO;
 
 import net.sf.mcf2pdf.mcfelements.util.XslFoDocumentBuilder;
 
-import org.jdom.Namespace;
+import org.jdom2.Namespace;
 
 
 

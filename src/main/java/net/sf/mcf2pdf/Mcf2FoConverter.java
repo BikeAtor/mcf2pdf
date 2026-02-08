@@ -43,7 +43,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.jdom.output.XMLOutputter;
+import org.jdom2.output.XMLOutputter;
 import org.xml.sax.SAXException;
 
 import com.sun.jna.Native;
