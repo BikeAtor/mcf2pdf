@@ -47,10 +47,18 @@ public class PageClipart implements PageDrawable {
 
 	@Override
 	public BufferedImage renderAsBitmap(PageRenderContext context,
-			Point drawOffsetPixels) throws IOException {
-		File f = context.getClipart(clipart.getUniqueName());
+			Point drawOffsetPixels, int widthPX, int heightPX) throws IOException {
+		File f = null;
+		if(clipart.getDesignElementId() == null) {
+			 f = context.getClipart(clipart.getUniqueName());
+		} else {
+			 f = context.getClipartViaDesignElementId(clipart.getDesignElementId());
+		}
 		if (f == null) {
-			context.getLog().warn("Clipart not found: " + clipart.getUniqueName());
+			if(clipart.getDesignElementId() == null)
+				context.getLog().warn("Clipart not found: " + clipart.getUniqueName());
+			else
+				context.getLog().warn("Clipart designElementId not found: " + clipart.getDesignElementId());
 			return null;
 		}
 		context.getLog().debug("Rendering clipart " + f);
@@ -59,7 +67,12 @@ public class PageClipart implements PageDrawable {
 		int heightPixel = context.toPixel(clipart.getArea().getHeight() / 10.0f);
 
 		drawOffsetPixels.x = drawOffsetPixels.y = 0;
-		return ImageUtil.loadClpFile(f, widthPixel, heightPixel);
+		BufferedImage loadedClip = ImageUtil.loadClpFile(f, widthPixel, heightPixel);
+		// apply rotation
+		if (clipart.getArea().getRotation() != 0) {
+			loadedClip = ImageUtil.rotateImage(loadedClip, (float)Math.toRadians(clipart.getArea().getRotation()), drawOffsetPixels);
+		}
+		return loadedClip;
 	}
 
 	@Override

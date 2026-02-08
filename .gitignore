@@ -16,3 +16,9 @@ hs_err_pid*
 /.settings
 /.classpath
 /.vscode
+# Default ignored files
+/shelf/
+/workspace.xml
+target
+.idea
+*.pdf
