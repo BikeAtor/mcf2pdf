@@ -23,8 +23,6 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.sax.SAXResult;
 import javax.xml.transform.stream.StreamSource;
 
-import org.apache.avalon.framework.configuration.ConfigurationException;
-import org.apache.avalon.framework.configuration.DefaultConfigurationBuilder;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -67,7 +65,7 @@ public class PdfUtil {
 	 */
 	@SuppressWarnings("rawtypes")
 	public static void convertFO2PDF(InputStream fo, OutputStream pdf, int dpi)
-			throws IOException, TransformerException, SAXException, URISyntaxException, ConfigurationException {
+			throws IOException, FOPException, TransformerException {
 
 		// FopFactory fopFactory = FopFactory.newInstance();
 		FopFactory fopFactory = FopFactory.newInstance(new File(".").toURI());
@@ -75,6 +73,7 @@ public class PdfUtil {
 		FOUserAgent foUserAgent = fopFactory.newFOUserAgent();
 		// configure foUserAgent as desired
 		foUserAgent.setTargetResolution(dpi);
+
 
 		// Setup output stream. Note: Using BufferedOutputStream
 		// for performance reasons (helpful with FileOutputStreams).

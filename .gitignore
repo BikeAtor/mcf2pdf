@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 *.class
 
 # Mobile Tools for Java (J2ME)
@@ -15,3 +16,11 @@ hs_err_pid*
 /.project
 /.settings
 /.classpath
+=======
+# Default ignored files
+/shelf/
+/workspace.xml
+target
+.idea
+*.pdf
+>>>>>>> 35568c6846ee27b90e7013d3e69662f54899abbb

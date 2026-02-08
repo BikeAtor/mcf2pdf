@@ -24,7 +24,6 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import net.sf.mcf2pdf.mcfelements.util.ImageUtil;
 import net.sf.mcf2pdf.mcfelements.util.PdfUtil;
 
 
@@ -46,10 +45,13 @@ public class Main {
 		options.addOption(o);
 		options.addOption("h", false, "Prints this help and exits.");
 		options.addOption("t", true, "Location of MCF temporary files.");
+		options.addOption("c", true, "Location of MCF (hps dir) additional files.");
 		options.addOption("w", true, "Location for temporary images generated during conversion.");
 		options.addOption("r", true, "Sets the resolution to use for page rendering, in DPI. Default is 150.");
 		options.addOption("n", true, "Sets the page number to render up to. Default renders all pages.");
 		options.addOption("b", false, "Prevents rendering of binding between double pages.");
+		options.addOption("p", false, "Enable page numbering");
+		options.addOption("s", true, "Set scaling for fonts which don't support bold text nativly. Default is 0.82.");
 		options.addOption("x", false, "Generates only XSL-FO content instead of PDF content.");
 		options.addOption("q", false, "Quiet mode - only errors are logged.");
 		options.addOption("d", false, "Enables debugging logging output.");
@@ -81,6 +83,15 @@ public class Main {
 			printUsage(options, new ParseException("Specified installation directory does not exist."));
 			System.exit(3);
 			return;
+		}
+		File hpsDirPath=null;
+		if (cl.hasOption("c")) {
+			hpsDirPath = new File(cl.getOptionValue("c"));
+			if (!hpsDirPath.isDirectory()) {
+				printUsage(options, new ParseException("Specified hps directory does not exist."));
+				System.exit(3);
+				return;
+			}
 		}
 
 		File tempDir = null;
@@ -148,6 +159,19 @@ public class Main {
 		if (cl.hasOption("b")) {
 			binding = false;
 		}
+		
+		boolean pageNum = false;
+		if (cl.hasOption("p")) {
+			pageNum = true;
+		}
+		double sx = 0.82d;
+		if (cl.hasOption("s")) {
+			try {
+				sx = Double.valueOf(cl.getOptionValue("s")).doubleValue();
+			} catch (Exception e) {
+				printUsage(options, new ParseException("Parameter for option -s must be a double value."));
+			}
+		}
 
 		OutputStream finalOut;
 		if (cl.getArgs()[1].equals("-"))
@@ -185,8 +209,8 @@ public class Main {
 		Log log = LogFactory.getLog(Main.class);
 
 		try {
-			new Mcf2FoConverter(installDir, tempDir, tempImages).convert(
-					mcfFile, xslFoOut, dpi, binding, maxPageNo);
+			new Mcf2FoConverter(installDir, tempDir, tempImages,hpsDirPath).convert(
+					mcfFile, xslFoOut, dpi, binding, pageNum, maxPageNo,sx);
 			xslFoOut.flush();
 
 			if (!cl.hasOption("x")) {

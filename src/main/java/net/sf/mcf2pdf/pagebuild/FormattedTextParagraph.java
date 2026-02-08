@@ -8,6 +8,7 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.font.TextAttribute;
+import java.awt.geom.AffineTransform;
 import java.text.AttributedCharacterIterator;
 import java.text.AttributedString;
 import java.util.Collections;
@@ -17,7 +18,7 @@ import java.util.Map;
 import java.util.Vector;
 
 public class FormattedTextParagraph {
-	
+
 	public static enum Alignment {
 		LEFT, CENTER, RIGHT, JUSTIFY
 	}
@@ -85,7 +86,13 @@ public class FormattedTextParagraph {
 			float fontSizeInch = text.getFontSize() / 72.0f;
 			
 			map.put(TextAttribute.SIZE, fontSizeInch * context.getTargetDpi());
+			Font fontOriginal = font;
 			font = font.deriveFont(map);
+			if (map.get(TextAttribute.WEIGHT) == TextAttribute.WEIGHT_BOLD && font.getFontName().equals(fontOriginal.getFontName())) {
+				AffineTransform afT = new AffineTransform();
+				afT.setToScale(context.getSX(), 1);
+				font = font.deriveFont(afT);
+			}
 			map.put(TextAttribute.FONT, font);
 
 			if (text.getText().length() > 0) {
@@ -109,6 +116,31 @@ public class FormattedTextParagraph {
 		return true;
 	}
 
+	public float getMarginTop() {
+		if (texts.isEmpty())
+			return 0;
+		for (FormattedText t : texts) {
+			if (t.getMargintop() > 0)
+				return t.getMargintop();
+			else
+				return 0;
+		}
+		return 0;
+	}
+
+	public float getMarginBottom() {
+		if (texts.isEmpty())
+			return 0;
+		for (FormattedText t : texts) {
+			if (t.getMarginbottom() > 0)
+				return t.getMarginbottom();
+			else
+				return 0;
+		}
+		return 0;
+	}
+
+
 	public int getEmptyHeight(Graphics2D graphics, PageRenderContext context) {
 		if (texts.isEmpty())
 			return 0;
@@ -120,6 +152,9 @@ public class FormattedTextParagraph {
 		FontMetrics fm = graphics.getFontMetrics(font);
 		return fm.getHeight();
 	}
+
+	// return bottom / top
+	//public
 	
 	private Font createFont(FormattedText text, PageRenderContext context) {
 		Font font = null;

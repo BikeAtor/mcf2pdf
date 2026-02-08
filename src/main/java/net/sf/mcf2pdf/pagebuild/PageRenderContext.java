@@ -27,6 +27,8 @@ import net.sf.mcf2pdf.mcfglobals.McfResourceScanner;
 public final class PageRenderContext {
 
 	private final static Log log = LogFactory.getLog(PageRenderContext.class);
+	
+	private double sx;
 
 	private int targetDpi;
 
@@ -34,9 +36,10 @@ public final class PageRenderContext {
 
 	private McfAlbumType albumType;
 
-	public PageRenderContext(int targetDpi, McfResourceScanner resources,
+	public PageRenderContext(int targetDpi, double sx, McfResourceScanner resources,
 			McfAlbumType albumType) {
 		this.targetDpi = targetDpi;
+		this.sx = sx;
 		this.resources = resources;
 		this.albumType = albumType;
 	}
@@ -48,6 +51,15 @@ public final class PageRenderContext {
 	 */
 	public Log getLog() {
 		return log;
+	}
+	
+	/**
+	 * Returns the scaling factor for fonts that don't natively support bold text.
+	 * 
+	 * @return the scaling factor for fonts that don't natively support bold text.
+	 */
+	public double getSX() {
+		return sx;
 	}
 
 	/**
@@ -111,11 +123,22 @@ public final class PageRenderContext {
 	 * @return The CLP file containing the vector graphic, or <code>null</code> if not found.
 	 */
 	public File getClipart(String fileName) {
+		if (fileName == null ) return null;
 		Matcher m = PATTERN_CLIPART.matcher(fileName);
 		if (!m.matches())
 			return null;
 
 		return resources.getClip(m.group(1));
+	}
+
+	public File getClipartViaDesignElementId(String designElementId) {
+		if (designElementId == null ) return null;
+		Fading config = resources.getDecoration(designElementId);
+		File clipart = null;
+		if(config != null) {
+			clipart = resources.getClip(config.getClipart().getFile().split("\\.")[0]);
+		}
+		return clipart;
 	}
 
 	/**
@@ -205,4 +228,23 @@ public final class PageRenderContext {
 		}
 		return new McfFotoFrame(clipart, fading, config);
 	}
+
+	public McfFotoFrame getFotoFrameViaDesignElementID(String passepartoutDesignElementId) {
+
+		//String fotoframeName = m.group(1);
+		Fading config = resources.getDecoration(passepartoutDesignElementId);
+		// fix getting fadding and clippart
+		File fading = resources.getClip(config.getFile().split("\\.")[0]);
+		File clipart = null;
+		if(config.getClipart()!=null) {
+			clipart = resources.getClip(config.getClipart().getFile().split("\\.")[0]);
+		}
+		if (config == null) {
+			log.warn("Could not get required resources for fotoframe: via passepartoutDesignElementId= " + passepartoutDesignElementId);
+			return null;
+		}
+		return new McfFotoFrame(clipart, fading, config);
+	}
+  
+  
 }

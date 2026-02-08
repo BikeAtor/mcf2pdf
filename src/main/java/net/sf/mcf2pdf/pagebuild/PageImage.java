@@ -63,7 +63,7 @@ public class PageImage implements PageDrawable {
 	}
 
 	@Override
-	public BufferedImage renderAsBitmap(PageRenderContext context, Point drawOffsetPixels) throws IOException {
+	public BufferedImage renderAsBitmap(PageRenderContext context, Point drawOffsetPixels, int widthPX, int heightPX) throws IOException {
 		int widthPixel = context.toPixel(image.getArea().getWidth() / 10.0f);
 		int heightPixel = context.toPixel(image.getArea().getHeight() / 10.0f);
 		if (image.getFileName() == null || "".equals(image.getFileName())) {
@@ -81,7 +81,13 @@ public class PageImage implements PageDrawable {
 		File clipartFile = null;
 		Fotoarea fotoArea = null;
 		if (image.getFadingFile() != null) {
-			McfFotoFrame frame = context.getFotoFrame(image.getFadingFile());
+			// TODO change if passpoart get all config
+			McfFotoFrame frame=null;
+			// old version
+			if(image.getPassepartoutDesignElementId() == null)
+				frame = context.getFotoFrame(image.getFadingFile());
+			else
+				frame = context.getFotoFrameViaDesignElementID(image.getPassepartoutDesignElementId());
 			if (frame != null && frame.getFading() != null) {
 				maskFile = frame.getFading();
 			} else {
@@ -96,7 +102,7 @@ public class PageImage implements PageDrawable {
 					fotoArea = config.getFotoarea();
 				}
 			}
-			if (maskFile == null) 
+			if (maskFile == null)
 				context.getLog().warn("Could not find fading file: " + image.getFadingFile());
 		}
 
@@ -163,9 +169,8 @@ public class PageImage implements PageDrawable {
 			g2d.setColor(borderColor);
 			g2d.fillRect(bleft, btop, widthPixel + 2 * borderWidth, heightPixel + 2 * borderWidth);
 		}
-
-		int leftOffset = -image.getLeft();
-		int topOffset = -image.getTop();
+		int leftOffset = -(int)(image.getLeft());
+		int topOffset = -(int)(image.getTop());
 		
 		drawOffsetPixels.x = -imgLeft;
 		drawOffsetPixels.y = -imgTop;
@@ -180,6 +185,13 @@ public class PageImage implements PageDrawable {
 			sw = sw * fotoArea.getWidth();
 			sh = sh * fotoArea.getHeight();
 		}
+		// hack for calculating this 4 s'values for SVG
+		if(baseImage.getName().toUpperCase().contains(".SVG")) {
+			leftOffset = (int)Math.round(leftOffset * 1.333);
+			topOffset = (int)Math.round(topOffset *1.3333);
+			sw = sw *1.3333;
+			sh = sh *1.3333;
+		}// end hack
 
 		// draw main image
 		g2d.drawImage(baseImg, 

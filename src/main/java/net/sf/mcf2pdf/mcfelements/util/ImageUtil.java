@@ -14,11 +14,7 @@ import java.awt.Rectangle;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.lang.ref.WeakReference;
 import java.util.Locale;
 
@@ -29,10 +25,17 @@ import org.apache.batik.bridge.BridgeContext;
 import org.apache.batik.bridge.GVTBuilder;
 import org.apache.batik.bridge.UserAgentAdapter;
 import org.apache.batik.bridge.ViewBox;
+import org.apache.batik.anim.dom.SAXSVGDocumentFactory;
 import org.apache.batik.ext.awt.RenderingHintsKeyExt;
 import org.apache.batik.gvt.GraphicsNode;
+import org.apache.batik.svggen.SVGGraphics2D;
+import org.apache.batik.svggen.SVGGraphics2DIOException;
 import org.apache.batik.util.XMLResourceDescriptor;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.w3c.dom.Attr;
+import org.w3c.dom.Element;
 import org.w3c.dom.svg.SVGDocument;
 import org.w3c.dom.svg.SVGPreserveAspectRatio;
 
@@ -42,14 +45,16 @@ import com.drew.metadata.Metadata;
 import com.drew.metadata.MetadataException;
 import com.drew.metadata.exif.ExifDirectoryBase;
 
-import net.sf.mcf2pdf.mcfelements.util.webp.Qt5Webp;
-import net.sf.mcf2pdf.mcfelements.util.webp.Qt5WebpLib;
+import net.sf.mcf2pdf.mcfelements.util.webp.Webp;
+import net.sf.mcf2pdf.mcfelements.util.webp.WebpLib;
 
 /**
  * Utility class for working with images in the context of the mcf2pdf project.
  */
 public final class ImageUtil {
 
+	private final static Log log = LogFactory.getLog(ImageUtil.class);
+	
 	/*
 	 * FIXME this uses CEWE Fotobook for MY personal pictures when they do not
 	 * have resolution information.
@@ -61,7 +66,7 @@ public final class ImageUtil {
 
 	public static final double SQRT_2 = Math.sqrt(2);
 
-	private static Qt5WebpLib qt5Library;
+	private static WebpLib qt5Library;
 
 	private ImageUtil() {
 	}
@@ -103,6 +108,7 @@ public final class ImageUtil {
 
 	private static int getImageRotation(File imageFile) throws IOException {
 		try {
+			if(imageFile.getName().endsWith("svg")) return 0;
 			Metadata md = ImageMetadataReader.readMetadata(imageFile);
 
 			ExifDirectoryBase ed = md.getFirstDirectoryOfType(ExifDirectoryBase.class);
@@ -143,31 +149,52 @@ public final class ImageUtil {
 	 * @throws IOException If any I/O related problem occurs reading the file.
 	 */
 	public static BufferedImage loadClpFile(File clpFile, int widthPixel, int heightPixel) throws IOException {
-		FileInputStream fis = new FileInputStream(clpFile);
-		ClpInputStream cis = null;
-		InputStream in = clpFile.getName().toLowerCase().endsWith(".clp") ? (cis = new ClpInputStream(fis)) : fis;
-
+		
 		UserAgentAdapter userAgentAdapter = new UserAgentAdapter();
-		BridgeContext bridgeContext = new BridgeContext(userAgentAdapter);
+        BridgeContext bridgeContext = new BridgeContext(userAgentAdapter);
 
-		SVGDocument svgDocument;
-		GraphicsNode rootSvgNode;
-		try {
-			String parser = XMLResourceDescriptor.getXMLParserClassName();
-			SAXSVGDocumentFactory factory = new SAXSVGDocumentFactory(parser);
-			svgDocument = (SVGDocument)factory.createDocument(clpFile.toURI().toString(), new InputStreamReader(in, "ISO-8859-1"));
-			rootSvgNode = getRootNode(svgDocument, bridgeContext);
-		}
-		finally {
-			IOUtils.closeQuietly(cis);
-			IOUtils.closeQuietly(fis);
-		}
+        SVGDocument svgDocument;
+        GraphicsNode rootSvgNode;
+        svgDocument = getSVGDocument(clpFile);
+        rootSvgNode = getRootNode(svgDocument, bridgeContext);
+        float[] vb = getViewBox(bridgeContext, svgDocument);
+		//
 
-		float[] vb = ViewBox.parseViewBoxAttribute(svgDocument.getRootElement(),
-				svgDocument.getRootElement().getAttribute("viewBox"), bridgeContext);
 
+// Finally, stream out SVG to the standard output using UTF-8
+// character to byte encoding
+		/*if(clpFile.getName().contains("clp")) {
+			boolean useCSS = true; // we want to use CSS style attribute
+			Writer out;
+			try {
+				SVGGraphics2D graphics = new SVGGraphics2D(svgDocument);
+				out = new OutputStreamWriter(new FileOutputStream(clpFile.getName().replace("clp","svg")), "UTF-8");
+				graphics.stream(svgDocument.getDocumentElement(), out,useCSS,false);
+				out.flush();
+				out.close();
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			} catch (SVGGraphics2DIOException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}*/
 		AffineTransform usr2dev = ViewBox.getPreserveAspectRatioTransform(vb, SVGPreserveAspectRatio.SVG_PRESERVEASPECTRATIO_NONE,
 				true, widthPixel, heightPixel);
+		// ugly fix for some clips
+		AffineTransform result = new AffineTransform();
+		if(usr2dev.getTranslateX()<0) {
+			log.debug("usr2dev="+usr2dev.toString());
+			log.debug("fixing for "+clpFile);
+			//usr2dev.translate(0,usr2dev.getTranslateY());
+			result = new AffineTransform();
+			result.scale((double)(widthPixel / vb[2]), (double)(heightPixel / vb[3]));
+			if(vb[0]>0)
+				vb[0]=0;
+			result.translate((double)(-vb[0]), (double)(-vb[1]));
+			usr2dev = result;
+		}
 
 		BufferedImage img = new BufferedImage(widthPixel, heightPixel, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g2d = img.createGraphics();
@@ -193,6 +220,76 @@ public final class ImageUtil {
 		return img;
 	}
 
+	 /**
+     * Returns SVG document from File
+      * @param  clpFile to file clp/svg.
+     *
+      *
+     * @return SVG Document
+      * @throws IOException If any I/O related problem occurs reading the file.
+     */
+     public static SVGDocument getSVGDocument(File clpFile)
+                  throws IOException, UnsupportedEncodingException {
+           FileInputStream fis = new FileInputStream(clpFile);
+           ClpInputStream cis = null;
+           InputStream in = clpFile.getName().toLowerCase().endsWith(".clp") ? (cis = new ClpInputStream(fis)) : fis;
+           SVGDocument svgDocument;
+           try {
+         String parser = XMLResourceDescriptor.getXMLParserClassName();
+         SAXSVGDocumentFactory factory = new SAXSVGDocumentFactory(parser);
+                  svgDocument = (SVGDocument)factory.createDocument(clpFile.toURI().toString(), new InputStreamReader(in, "ISO-8859-1"));
+           }
+           finally {
+                  IOUtils.closeQuietly(cis);
+                  IOUtils.closeQuietly(fis);
+           }
+           return svgDocument;
+     }
+	
+	/**
+     * Create default array view box for scaling svg or clp files based on width/height of image attributes
+      * @param svgDocument SVGDocument.
+     *
+     * @return float array with default viewbox for clp/or/svg file based on width/height of SVGDocument
+     *
+     */
+     private static float[] createDefaultViewBox(SVGDocument svgDocument) {
+
+           Element svgRoot = svgDocument.getDocumentElement();
+           Attr width =null;
+           Attr height = null;
+           width = svgRoot.getAttributeNodeNS(null, "width");   
+           if(width!=null) {
+                  log.debug("width in file="+width.getValue());
+           }
+           height = svgRoot.getAttributeNodeNS(null, "height");
+           if(height!=null) {
+                  log.debug("height in file="+height.getValue());
+           }
+           log.debug("Creating default viewbox with 0f,0.0f,"+width.getValue()+","+height.getValue());
+           return new float[] {0.0f,0.0f,Float.parseFloat(width.getValue()),Float.parseFloat(height.getValue())};
+     }
+
+     /**
+     * Returns viewbox array from document or create default
+      * @param svgDocument SVGDocument.
+     * @param bridgeContext BridgeContext
+     *
+     * @return float array with default viewbox for clp/or/svg file based on width/height of SVGDocument
+     *
+     */
+     public static float[] getViewBox(BridgeContext bridgeContext,
+                  SVGDocument svgDocument) {
+           float[] vb = ViewBox.parseViewBoxAttribute(svgDocument.getRootElement(),
+                         svgDocument.getRootElement().getAttribute("viewBox"), bridgeContext);
+           if( vb == null )
+           {
+                  log.debug("viewbox empty");
+                  vb = createDefaultViewBox(svgDocument);
+           }
+           return vb;
+     }
+	
 	private static GraphicsNode getRootNode(SVGDocument document, BridgeContext bridgeContext) {
 		// Build the tree and get the document dimensions
 		GVTBuilder builder = new GVTBuilder();
@@ -264,12 +361,22 @@ public final class ImageUtil {
 		// special treatment for webp files
 		if (f.getName().toLowerCase(Locale.US).endsWith(".webp")) {
 			if (qt5Library == null) {
-				qt5Library = Qt5Webp.loadLibrary();
+				qt5Library = Webp.loadLibrary();
 			}
 
-			return Qt5Webp.loadWebPImage(f, qt5Library);
+			return Webp.loadWebPImage(f, qt5Library);
 		}
 
-		return ImageIO.read(f);
+		BufferedImage ret = null;
+		try {
+			ret = ImageIO.read(f);
+		} catch (IOException o){
+			if( o.getMessage().contains("Unsupported JPEG process: SOF type")) {
+				log.error("Cant read file "+f.toString()+ " convert file to png/tiff/gif");
+				throw o;
+			}
+		}
+		return ret;
 	}
+
 }

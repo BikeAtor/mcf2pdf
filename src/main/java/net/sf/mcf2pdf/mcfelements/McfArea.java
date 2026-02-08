@@ -19,6 +19,9 @@ public interface McfArea {
 
 	public final static Pattern CLIPARTAREA = Pattern.compile("CLIPARTAREA", Pattern.CASE_INSENSITIVE);
 
+	public final static Pattern SPINETEXTAREA = Pattern.compile("SPINETEXTAREA", Pattern.CASE_INSENSITIVE);
+
+
 	public McfPage getPage();
 
 	public float getLeft();
@@ -56,4 +59,7 @@ public interface McfArea {
 	public McfBorder getBorder();
 
 	public McfCorners getCorners();
+
+	public McfPosition getPosition();
+
 }

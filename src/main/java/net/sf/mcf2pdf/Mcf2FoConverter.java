@@ -35,6 +35,7 @@ import net.sf.mcf2pdf.pagebuild.PageBuilder;
 import net.sf.mcf2pdf.pagebuild.PageClipart;
 import net.sf.mcf2pdf.pagebuild.PageImage;
 import net.sf.mcf2pdf.pagebuild.PageImageBackground;
+import net.sf.mcf2pdf.pagebuild.PageNum;
 import net.sf.mcf2pdf.pagebuild.PageRenderContext;
 import net.sf.mcf2pdf.pagebuild.PageText;
 
@@ -85,7 +86,7 @@ public class Mcf2FoConverter {
 	 * @throws SAXException If any of the XML files in the installation directory
 	 * which are parsed have a format error.
 	 */
-	public Mcf2FoConverter(File mcfInstallDir, File mcfTempDir, File tempImageDir) throws IOException, SAXException {
+	public Mcf2FoConverter(File mcfInstallDir, File mcfTempDir, File tempImageDir,File hpsDirPath) throws IOException, SAXException {
 		this.tempImageDir = tempImageDir;
 
 		// get all products - scan ALL XML files in Resources for fotobookdefinitions
@@ -103,24 +104,27 @@ public class Mcf2FoConverter {
 		// search all resources
 		// on Windows, also scan "<Common Application Data>/hps", if existing
 		File hpsDir = null;
-		try {
-			char[] pszPath = new char[WinDef.MAX_PATH];
-			if (Shell32.INSTANCE.SHGetFolderPath(null, ShlObj.CSIDL_COMMON_APPDATA, null, ShlObj.SHGFP_TYPE_CURRENT, pszPath).intValue() == 0) {
-				File f = new File(new File(Native.toString(pszPath)), "hps");
-				if (f.isDirectory()) {
-					hpsDir = f;
+		if (hpsDirPath == null) {
+			hpsDir = null;
+			try {
+				char[] pszPath = new char[WinDef.MAX_PATH];
+				if (Shell32.INSTANCE.SHGetFolderPath(null, ShlObj.CSIDL_COMMON_APPDATA, null, ShlObj.SHGFP_TYPE_CURRENT, pszPath).intValue() == 0) {
+					File f = new File(new File(Native.toString(pszPath)), "hps");
+					if (f.isDirectory()) {
+						hpsDir = f;
+					}
+				}
+			} catch (Throwable t) {
+				// OK, no Windows, obviously
+				// try home directory
+				File homeHpsDir = new File(new File(System.getProperty("user.home")), ".mcf/hps");
+				if (homeHpsDir.isDirectory()) {
+					hpsDir = homeHpsDir;
 				}
 			}
+		} else {
+			hpsDir = hpsDirPath;
 		}
-		catch (Throwable t) {
-			// OK, no Windows, obviously
-			// try home directory
-			File homeHpsDir = new File(new File(System.getProperty("user.home")), ".mcf/hps");
-			if (homeHpsDir.isDirectory()) {
-				hpsDir = homeHpsDir;
-			}
-		}
-
 		List<File> scanDirs = new ArrayList<File>();
 		scanDirs.add(new File(mcfInstallDir, "Resources"));
 		scanDirs.add(mcfTempDir);
@@ -148,7 +152,7 @@ public class Mcf2FoConverter {
 	 * @throws SAXException If any XML related problem occurs, e.g. the input file
 	 * has an invalid format.
 	 */
-	public void convert(File mcfFile, OutputStream xslFoOut, int dpi, boolean binding, int maxPageNo) throws IOException, SAXException {
+	public void convert(File mcfFile, OutputStream xslFoOut, int dpi, boolean binding, boolean pageNum, int maxPageNo, double sx) throws IOException, SAXException {
 		// build MCF DOM
 		log.debug("Reading MCF file");
 		McfFotobook book = new FotobookBuilder().readFotobook(mcfFile);
@@ -170,22 +174,33 @@ public class Mcf2FoConverter {
 			throw new IOException("No album type definition found for used print product '" + book.getProductName() + "'");
 
 		// prepare page render context
-		context = new PageRenderContext(dpi, resources, albumType);
+		context = new PageRenderContext(dpi, sx, resources, albumType);
 
 		// create XSL-FO document
 		XslFoDocumentBuilder docBuilder = new XslFoDocumentBuilder();
 
-		float pageWidth = albumType.getUsableWidth() / 10.0f * 2;
-		float pageHeight = albumType.getUsableHeight() / 10.0f;
-
-		// set page master
-		docBuilder.addPageMaster("default", pageWidth, pageHeight);
-
-		// create master for cover
-		float coverPageWidth = pageWidth + (albumType.getCoverExtraHorizontal() * 2 + albumType.getSpineWidth(book.getNormalPages())) / 10.0f;
-		float coverPageHeight = pageHeight + albumType.getCoverExtraVertical() / 10.0f;
-
-		docBuilder.addPageMaster("cover", coverPageWidth, coverPageHeight);
+		// setting page widths for master pages
+		int coverPageWidthPX = -1;
+		int coverPageHeightPX = -1;
+		int pageWidthPX = -1;
+		int pageHeightPX = -1;
+		
+		for (McfPage p : book.getPages()) {
+			if (McfPage.FULLCOVER.matcher(p.getType()).matches() && coverPageWidthPX == -1 && coverPageHeightPX == -1) {
+				coverPageWidthPX = context.toPixel(p.getBundlesize().getWidth() / 10.0f);
+				coverPageHeightPX = context.toPixel(p.getBundlesize().getHeight() / 10.0f);
+			} else if (McfPage.CONTENT.matcher(p.getType()).matches()&& pageWidthPX == -1 && pageHeightPX == -1 ) {
+				pageWidthPX = context.toPixel(p.getBundlesize().getWidth() / 10.0f);
+				pageHeightPX = context.toPixel(p.getBundlesize().getHeight() / 10.0f);
+			}
+			if (coverPageWidthPX != -1 && coverPageHeightPX != -1 && pageWidthPX != -1 && pageHeightPX != -1) {
+				break;
+			}
+		}
+		
+		// setting master pages
+		docBuilder.addPageMaster("cover", coverPageWidthPX, coverPageHeightPX);
+		docBuilder.addPageMaster("default", pageWidthPX, pageHeightPX);
 
 		// prepare temporary folder
 		log.debug("Preparing temporary working directory");
@@ -205,8 +220,9 @@ public class Mcf2FoConverter {
 
 		if (leftCover != null) {
 			log.info("Rendering cover...");
-			currentPage = new BitmapPageBuilder(coverPageWidth, coverPageHeight, context, tempImageDir);
-			processDoublePage(leftCover, rightCover, imageDir, false);
+			currentPage = new BitmapPageBuilder(coverPageWidthPX, coverPageHeightPX, context, tempImageDir);
+			processDoublePage(leftCover, rightCover, imageDir, false, false,
+					book, coverPageWidthPX, coverPageHeightPX);
 			docBuilder.startFlow("cover");
 			currentPage.addToDocumentBuilder(docBuilder);
 			docBuilder.endFlow();
@@ -230,17 +246,16 @@ public class Mcf2FoConverter {
 		// now, process pages as a pair
 		docBuilder.startFlow("default");
 		log.debug("Starting rendering of " + normalPages.size() + " pages");
-		currentPage = new BitmapPageBuilder(pageWidth, pageHeight, context, tempImageDir);
+		currentPage = new BitmapPageBuilder(pageWidthPX, pageHeightPX, context, tempImageDir);
 
 		for (int i = 0; i < normalPages.size(); i += 2) {
 			log.info("Rendering pages " + i + "+" + (i+1) + "...");
 			processDoublePage(normalPages.get(i),
 					i + 1 < normalPages.size() ? normalPages.get(i + 1) : null,
-					imageDir, binding);
+					imageDir, binding, pageNum, book, pageWidthPX, pageHeightPX);
 			currentPage.addToDocumentBuilder(docBuilder);
 			if (i < normalPages.size() - 2) {
-				docBuilder.newPage();
-				currentPage = new BitmapPageBuilder(pageWidth, pageHeight, context, tempImageDir);
+				currentPage = new BitmapPageBuilder(pageWidthPX, pageHeightPX, context, tempImageDir);
 			}
 		}
 
@@ -252,8 +267,9 @@ public class Mcf2FoConverter {
 	}
 
 	private void processDoublePage(McfPage leftPage, McfPage rightPage, File imageDir,
-			boolean addBinding) throws IOException {
-		// handle packgrounds
+			boolean addBinding, boolean addPageNum, McfFotobook book,
+			int pageWidth, int pageHeight) throws IOException {
+		// handle backgrounds
 		PageBackground bg = new PageBackground(
 				leftPage == null ? Collections.<McfBackground>emptyList() : leftPage.getBackgrounds(),
 				rightPage == null ? Collections.<McfBackground>emptyList() : rightPage.getBackgrounds());
@@ -279,12 +295,19 @@ public class Mcf2FoConverter {
 			else if (McfArea.TEXTAREA.matcher(a.getAreaType()).matches()) {
 				currentPage.addDrawable(new PageText((McfText)a.getContent()));
 			}
+			else if (McfArea.SPINETEXTAREA.matcher(a.getAreaType()).matches()) {
+				currentPage.addDrawable(new PageText((McfText)a.getContent()));
+			}
+
+		}
+		
+		if (addPageNum) {
+			currentPage.addDrawable(new PageNum(book, leftPage, "left", pageWidth, pageHeight));
+			currentPage.addDrawable(new PageNum(book, rightPage, "right", pageWidth, pageHeight));
 		}
 
 		if (addBinding) {
-			currentPage.addDrawable(new PageBinding(resources.getBinding(),
-					(albumType.getUsableWidth() + albumType.getBleedMargin()) / 10.0f * 2,
-					(albumType.getUsableHeight() + albumType.getBleedMargin() * 2) / 10.0f));
+			currentPage.addDrawable(new PageBinding(resources.getBinding()));
 		}
 	}
 

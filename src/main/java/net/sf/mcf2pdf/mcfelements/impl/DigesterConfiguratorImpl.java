@@ -10,6 +10,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Vector;
 
+import net.sf.mcf2pdf.mcfelements.*;
 import org.apache.commons.beanutils.ConversionException;
 import org.apache.commons.beanutils.ConvertUtils;
 import org.apache.commons.beanutils.Converter;
@@ -24,16 +25,6 @@ import net.sf.mcf2pdf.mcfconfig.Decoration;
 import net.sf.mcf2pdf.mcfconfig.Fading;
 import net.sf.mcf2pdf.mcfconfig.Fotoarea;
 import net.sf.mcf2pdf.mcfconfig.Template;
-import net.sf.mcf2pdf.mcfelements.DigesterConfigurator;
-import net.sf.mcf2pdf.mcfelements.McfArea;
-import net.sf.mcf2pdf.mcfelements.McfBackground;
-import net.sf.mcf2pdf.mcfelements.McfBorder;
-import net.sf.mcf2pdf.mcfelements.McfClipart;
-import net.sf.mcf2pdf.mcfelements.McfFotobook;
-import net.sf.mcf2pdf.mcfelements.McfImage;
-import net.sf.mcf2pdf.mcfelements.McfImageBackground;
-import net.sf.mcf2pdf.mcfelements.McfPage;
-import net.sf.mcf2pdf.mcfelements.McfText;
 import net.sf.mcf2pdf.mcfelements.util.DigesterUtil;
 import net.sf.mcf2pdf.mcfelements.McfCorner;
 import net.sf.mcf2pdf.mcfelements.McfCorners;
@@ -97,12 +88,25 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 		// fotobook element
 		digester.addObjectCreate("fotobook", getFotobookClass());
 		DigesterUtil.addSetProperties(digester, "fotobook", getSpecialFotobookAttributes());
+		
+		// pagenumbering element
+		digester.addObjectCreate("fotobook/pagenumbering", getPageNumClass());
+		digester.addSetTop("fotobook/pagenumbering", "setFotobook");
+//		digester.addSetProperties("fotobook/pagenumbering");
+		DigesterUtil.addSetProperties(digester, "fotobook/pagenumbering", getSpecialPageNumAttributes());
+		digester.addSetNext("fotobook/pagenumbering", "addPageNum", McfPageNum.class.getName());
 
 		// page element
 		digester.addObjectCreate("fotobook/page", getPageClass());
 		digester.addSetTop("fotobook/page", "setFotobook");
 		DigesterUtil.addSetProperties(digester, "fotobook/page", getSpecialPageAttributes());
 		digester.addSetNext("fotobook/page", "addPage", McfPage.class.getName());
+		
+		// bundlesize element
+		digester.addObjectCreate("fotobook/page/bundlesize", getBundlesizeClass());
+		digester.addSetTop("fotobook/page/bundlesize", "setPage");
+		digester.addSetProperties("fotobook/page/bundlesize");
+		digester.addSetNext("fotobook/page/bundlesize", "setBundlesize", McfBundlesize.class.getName());
 
 		// background element
 		digester.addObjectCreate("fotobook/page/background", getBackgroundClass());
@@ -131,6 +135,11 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
                 DigesterUtil.addSetProperties(digester, "fotobook/page/area/corners/corner", getSpecialCornerAttributes());
                 digester.addSetNext("fotobook/page/area/corners/corner", "addCorner");
 
+		// border element Version 4.x
+		digester.addObjectCreate("fotobook/page/area/decoration/border", getBorderClass());
+		DigesterUtil.addSetProperties(digester, "fotobook/page/area/decoration/border", getSpecialBorderAttributes());
+		digester.addSetNext("fotobook/page/area/decoration/border", "setBorder");
+
 		// text element, including textFormat element
 		digester.addObjectCreate("fotobook/page/area/text", getTextClass());
 		digester.addSetProperties("fotobook/page/area/text");
@@ -151,28 +160,53 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 		digester.addSetNext("fotobook/page/area/image", "setContent");
 		digester.addSetTop("fotobook/page/area/image", "setArea");
 
+		// cutout element Version 4.x
+		digester.addObjectCreate("fotobook/page/area/image/cutout", getCutoutClass());
+		DigesterUtil.addSetProperties(digester, "fotobook/page/area/image/cutout", getSpecialCutoutAttributes());
+		digester.addSetNext("fotobook/page/area/image/cutout", "setCutout", McfCutout.class.getName());
+
+
 		// imagebackground element
 		digester.addObjectCreate("fotobook/page/area/imagebackground", getImageBackgroundClass());
 		DigesterUtil.addSetProperties(digester, "fotobook/page/area/imagebackground", getSpecialImageAttributes());
 		digester.addSetNext("fotobook/page/area/imagebackground", "setContent");
 		digester.addSetTop("fotobook/page/area/imagebackground", "setArea");
 
+		// position element
+		digester.addObjectCreate("fotobook/page/area/position", getPositionClass());
+		DigesterUtil.addSetProperties(digester, "fotobook/page/area/position", getSpecialPositionAttributes());
+		digester.addSetNext("fotobook/page/area/position", "setPosition");
+
+
+
 		// colors config file
 		digester.addObjectCreate("templates", LinkedList.class);
 		digester.addObjectCreate("templates/template", Template.class);
 		digester.addSetProperties("templates/template");
 		digester.addSetNext("templates/template", "add");
-
+		
 		// Decorations (fotoframes)
 		digester.addObjectCreate("decorations", LinkedList.class);
 		digester.addObjectCreate("decorations/decoration", Decoration.class);
+		DigesterUtil.addSetProperties(digester, "decorations/decoration", getSpecialDecorationAttributes());
 		digester.addObjectCreate("decorations/decoration/fading", Fading.class);
 		digester.addSetProperties("decorations/decoration/fading");
 		digester.addSetNext("decorations/decoration/fading", "setFading");
-
+		// old
 		digester.addObjectCreate("decorations/decoration/fading/clipart", Clipart.class);
 		digester.addSetProperties("decorations/decoration/fading/clipart");
 		digester.addSetNext("decorations/decoration/fading/clipart", "setClipart");
+
+		// new file with cliparts 7.1.5
+
+
+		digester.addObjectCreate("decorations/decoration/clipart", Clipart.class);
+		digester.addSetProperties("decorations/decoration/clipart");
+		digester.addSetNext("decorations/decoration/clipart", "setClipart");
+
+
+		// Decorations clipart
+
 
 		digester.addObjectCreate("decorations/decoration/fading/fotoarea", Fotoarea.class);
 		digester.addSetProperties("decorations/decoration/fading/fotoarea");
@@ -231,6 +265,23 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 		result.add(new String[] { "programversion", "programVersion" });
 		return result;
 	}
+	
+	protected Class<? extends McfPageNum> getPageNumClass() {
+		return McfPageNumImpl.class;
+	}
+	
+	protected List<String[]> getSpecialPageNumAttributes() {
+		List<String[]> result = new Vector<String[]>();
+		result.add(new String[] { "textstring", "textString" });
+		result.add(new String[] { "margin", "horizontalMargin" });
+		result.add(new String[] { "textcolor", "textColor" });
+		result.add(new String[] { "bgcolor", "bgColor" });
+		result.add(new String[] { "fontsize", "fontSize" });
+		result.add(new String[] { "fontbold", "fontBold" });
+		result.add(new String[] { "fontitalics", "fontItalics" });
+		result.add(new String[] { "fontfamily", "fontFamily"});
+		return result;
+	}
 
 	protected Class<? extends McfPage> getPageClass() {
 		return McfPageImpl.class;
@@ -241,6 +292,10 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 		result.add(new String[] { "pagenr", "pageNr" });
 		return result;
 	}
+	
+	protected Class<? extends McfBundlesize> getBundlesizeClass() {
+		return McfBundlesizeImpl.class;
+	}
 
 	protected Class<? extends McfBackground> getBackgroundClass() {
 		return McfBackgroundImpl.class;
@@ -249,6 +304,10 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 	protected List<String[]> getSpecialBackgroundAttributes() {
 		List<String[]> result = new Vector<String[]>();
 		result.add(new String[] { "templatename", "templateName" });
+		result.add(new String[] { "designElementId", "designElementId" });
+		result.add(new String[] { "fading", "fading" });
+		result.add(new String[] { "hue", "hue" });
+		result.add(new String[] { "rotation", "rotation" });
 		return result;
 	}
 
@@ -261,6 +320,10 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 		result.add(new String[] { "filenamemaster", "fileNameMaster" });
 		result.add(new String[] { "filename", "fileName" });
 		result.add(new String[] { "fading", "fadingFile" });
+		result.add(new String[] { "top", "top" });
+		result.add(new String[] { "left", "left" });
+		result.add(new String[] { "scale", "scale" });
+		result.add(new String[] { "passepartoutDesignElementId", "passepartoutDesignElementId" });
 		return result;
 	}
 
@@ -270,7 +333,6 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
 
 	protected List<String[]> getSpecialAreaAttributes() {
 		List<String[]> result = new Vector<String[]>();
-		result.add(new String[] { "zposition", "zPosition" });
 		result.add(new String[] { "areatype", "areaType" });
 		result.add(new String[] { "borderenabled", "borderEnabled" });
 		result.add(new String[] { "sizeborder", "borderSize" });
@@ -333,5 +395,40 @@ public class DigesterConfiguratorImpl implements DigesterConfigurator {
        		result.add(new String[] { "shape", "shape" });
        		return result;
         }
+
+		protected Class<? extends McfPosition> getPositionClass() {
+		return McfPositionImpl.class;
+	}
+
+	protected List<String[]> getSpecialPositionAttributes() {
+		List<String[]> result = new Vector<String[]>();
+		result.add(new String[] { "height", "height" });
+		result.add(new String[] { "left", "left" });
+		result.add(new String[] { "rotation", "rotation" });
+		result.add(new String[] { "top", "top" });
+		result.add(new String[] { "width", "width" });
+		result.add(new String[] { "zposition", "zposition" });
+		return result;
+	}
+
+	protected Class<? extends McfCutout> getCutoutClass() {
+		return McfCutoutImpl.class;
+	}
+
+	protected List<String[]> getSpecialCutoutAttributes() {
+		List<String[]> result = new Vector<String[]>();
+		result.add(new String[]{"left", "left"});
+		result.add(new String[]{"scale", "scale"});
+		result.add(new String[]{"top", "top"});
+		return result;
+	}
+
+	protected List<String[]> getSpecialDecorationAttributes() {
+		List<String[]> result = new Vector<String[]>();
+		result.add(new String[] { "type", "type" });
+		result.add(new String[] { "id", "id" });
+		result.add(new String[] { "designElementId", "designElementId" });
+		return result;
+	}
 
 }
